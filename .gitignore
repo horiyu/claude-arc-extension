@@ -1,0 +1,5 @@
+# macOS
+.DS_Store
+
+# Chrome extension runtime metadata (auto-generated when loading unpacked extension)
+_metadata/
