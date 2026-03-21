@@ -12,5 +12,28 @@
       "urlFilter": "https://cdn.segment.com/next-integrations/actions/amplitude-plugins/f12a4347e1080fb88155.js",
       "resourceTypes": ["script"]
     }
+  },
+  {
+    "id": 2,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "responseHeaders": [
+        {
+          "header": "Access-Control-Allow-Origin",
+          "operation": "set",
+          "value": "*"
+        },
+        {
+          "header": "Cross-Origin-Resource-Policy",
+          "operation": "set",
+          "value": "cross-origin"
+        }
+      ]
+    },
+    "condition": {
+      "urlFilter": "https://claude.ai/images/*",
+      "resourceTypes": ["image", "xmlhttprequest", "other"]
+    }
   }
 ]
