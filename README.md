@@ -1,5 +1,9 @@
 # Claude in Arc
 
+[日本語](#日本語) | [English](#english)
+
+## 日本語
+
 Arc ブラウザ上で Claude をサイドパネルとして扱いやすくするための，個人利用向け Chrome 拡張機能です．
 
 > [!WARNING]
@@ -59,3 +63,67 @@ Arc ブラウザ上で Claude をサイドパネルとして扱いやすくす�
 
 現時点ではライセンスを明示していません．
 明示的な許可なく，本リポジトリの内容を再配布・商用利用しないでください．
+
+---
+
+## English
+
+This is a Chrome extension for personal use that makes Claude easier to use as a side panel in Arc Browser.
+
+> [!WARNING]
+> This repository is unofficial and experimental. It is not affiliated with Anthropic, Claude, The Browser Company, or Arc.
+
+## Overview
+
+This extension is intended to open Claude as an Arc extension and help with browser-based work.
+
+Main use cases include:
+
+- Opening Claude as an Arc side panel
+- Assisting browser operations while chatting with Claude
+- Using scheduled tasks and notifications
+- Using file operations and downloads when needed
+
+## Important Notes
+
+This extension is intended for developers and experimental use. It is not a general-purpose extension distributed through a public extension store.
+
+The `manifest.json` requests powerful permissions, including:
+
+- `host_permissions: ["<all_urls>"]`
+- `debugger`
+- `tabs`
+- `scripting`
+- `downloads`
+- `nativeMessaging`
+- `declarativeNetRequest`
+
+These permissions may relate to accessing information from pages you browse, controlling browser behavior, applying network rules, downloading files, and communicating with external processes.
+Use this extension only in an environment you control and only after understanding what these permissions allow.
+
+## Installation
+
+1. Clone this repository locally
+2. Open Arc and enter `arc://extensions` in the address bar
+3. Enable "Developer mode" in the top-right corner
+4. Click "Load unpacked"
+5. Select this repository directory
+6. Click the Claude icon in the toolbar
+7. Use it as a side panel with Split View if desired
+
+## Before Use
+
+- Review the extension permissions
+- Do not use it on pages that handle sensitive information
+- Do not use it in critical work environments or production environments
+- It may stop working due to changes in Claude, Arc, or Chrome
+
+## Disclaimer
+
+Use this extension at your own risk.
+The author assumes no responsibility for any damage, malfunction, data loss, information leakage, account suspension, or any other issues caused by using this extension.
+
+## License
+
+No license is currently specified.
+Do not redistribute or use the contents of this repository commercially without explicit permission.
