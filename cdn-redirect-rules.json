@@ -35,5 +35,22 @@
       "urlFilter": "https://claude.ai/images/*",
       "resourceTypes": ["image", "xmlhttprequest", "other"]
     }
+  },
+  {
+    "id": 3,
+    "priority": 2,
+    "action": {
+      "type": "modifyHeaders",
+      "responseHeaders": [
+        {
+          "header": "Content-Security-Policy",
+          "operation": "remove"
+        }
+      ]
+    },
+    "condition": {
+      "urlFilter": "||claude.ai/",
+      "resourceTypes": ["main_frame", "sub_frame"]
+    }
   }
 ]
