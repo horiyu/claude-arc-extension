@@ -15,29 +15,51 @@
          }
       }
    },
-   "content_scripts": [ {
-      "js": [ "assets/content-script.ts-Bwa5rY9t.js" ],
-      "matches": [ "https://claude.ai/*", "https://*.claude.ai/*" ],
-      "run_at": "document_end"
-   }, {
-      "all_frames": true,
-      "js": [ "assets/accessibility-tree.js-D8KNCIWO.js" ],
-      "matches": [ "<all_urls>" ],
-      "run_at": "document_start"
-   }, {
-      "all_frames": false,
-      "js": [ "assets/agent-visual-indicator.js-Ct7LqXhp.js" ],
-      "matches": [ "<all_urls>" ],
-      "run_at": "document_idle"
-   } ],
+   "content_scripts": [
+      {
+         "js": [
+            "assets/content-script.ts-loader-Dd0kPPVP.js"
+         ],
+         "matches": [
+            "https://claude.ai/*",
+            "https://*.claude.ai/*"
+         ],
+         "run_at": "document_end"
+      },
+      {
+         "all_frames": true,
+         "js": [
+            "assets/accessibility-tree.js-B-oUarrX.js"
+         ],
+         "matches": [
+            "<all_urls>"
+         ],
+         "run_at": "document_start"
+      },
+      {
+         "all_frames": false,
+         "js": [
+            "assets/agent-visual-indicator.js-CwioqiOd.js"
+         ],
+         "matches": [
+            "<all_urls>"
+         ],
+         "run_at": "document_idle"
+      }
+   ],
    "content_security_policy": {
-      "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https://api.anthropic.com wss://api.anthropic.com https://claude.ai https://platform.claude.com https://api.segment.io https://*.segment.com https://*.ingest.us.sentry.io https://api.honeycomb.io https://browser-intake-us5-datadoghq.com wss://bridge.claudeusercontent.com wss://bridge-staging.claudeusercontent.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:;"
+      "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https://api.anthropic.com wss://api.anthropic.com https://claude.ai https://platform.claude.com https://a-cdn.anthropic.com https://a-api.anthropic.com https://*.ingest.us.sentry.io https://browser-intake-us5-datadoghq.com wss://bridge.claudeusercontent.com wss://bridge-staging.claudeusercontent.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:;"
    },
    "description": "Claude for Arc Browser",
    "externally_connectable": {
-      "matches": [ "https://claude.ai/*", "https://*.claude.ai/*" ]
+      "matches": [
+         "https://claude.ai/*",
+         "https://*.claude.ai/*"
+      ]
    },
-   "host_permissions": [ "<all_urls>" ],
+   "host_permissions": [
+      "<all_urls>"
+   ],
    "icons": {
       "128": "icon-128.png"
    },
@@ -46,29 +68,72 @@
    "minimum_chrome_version": "116",
    "name": "Claude",
    "options_page": "options.html",
-   "declarative_net_request": {
-      "rule_resources": [ {
-         "id": "cdn-redirect-rules",
-         "enabled": true,
-         "path": "cdn-redirect-rules.json"
-      } ]
-   },
-   "permissions": [ "storage", "activeTab", "scripting", "debugger", "tabGroups", "tabs", "alarms", "notifications", "system.display", "webNavigation", "declarativeNetRequest", "declarativeNetRequestWithHostAccess", "offscreen", "nativeMessaging", "unlimitedStorage", "downloads" ],
+   "permissions": [
+      "storage",
+      "activeTab",
+      "scripting",
+      "debugger",
+      "tabGroups",
+      "tabs",
+      "alarms",
+      "notifications",
+      "webNavigation",
+      "declarativeNetRequest",
+      "declarativeNetRequestWithHostAccess",
+      "offscreen",
+      "nativeMessaging",
+      "unlimitedStorage",
+      "downloads",
+      "identity"
+   ],
    "storage": {
       "managed_schema": "managed_schema.json"
    },
-   "version": "1.0.63",
-   "web_accessible_resources": [ {
-      "matches": [ "https://*.claude.ai/*", "https://claude.ai/*" ],
-      "resources": [ "assets/content-script.ts-Bwa5rY9t.js" ],
-      "use_dynamic_url": false
-   }, {
-      "matches": [ "<all_urls>" ],
-      "resources": [ "assets/accessibility-tree.js-D8KNCIWO.js", "assets/agent-visual-indicator.js-Ct7LqXhp.js" ],
-      "use_dynamic_url": false
-   }, {
-      "matches": [ "<all_urls>" ],
-      "resources": [ "sidepanel.html", "theme-init.js", "assets/*", "sounds/*", "i18n/*", "icon-128.png", "claude_icon.svg" ],
-      "use_dynamic_url": false
-   } ]
+   "version": "1.0.93",
+   "web_accessible_resources": [
+      {
+         "matches": [
+            "https://*.claude.ai/*",
+            "https://claude.ai/*"
+         ],
+         "resources": [
+            "assets/onboarding-prompts-CJtFEMjA.js",
+            "assets/content-script.ts-D0rMrCjG.js"
+         ],
+         "use_dynamic_url": false
+      },
+      {
+         "matches": [
+            "<all_urls>"
+         ],
+         "resources": [
+            "assets/accessibility-tree.js-B-oUarrX.js",
+            "assets/agent-visual-indicator.js-CwioqiOd.js"
+         ],
+         "use_dynamic_url": false
+      },
+      {
+         "matches": [
+            "<all_urls>"
+         ],
+         "resources": [
+            "sidepanel.html",
+            "assets/*",
+            "sounds/*",
+            "i18n/*",
+            "icon-128.png",
+            "claude_icon.svg"
+         ],
+         "use_dynamic_url": false
+      }
+   ],
+   "declarative_net_request": {
+      "rule_resources": [
+         {
+            "id": "arc-net-rules",
+            "enabled": true,
+            "path": "cdn-redirect-rules.json"
+         }
+      ]
+   }
 }

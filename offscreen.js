@@ -3,13 +3,30 @@
 
 console.log("[Offscreen] Document loaded and ready");
 
-// Initialize AudioContext immediately
-const AudioCtx = window.AudioContext || window.webkitAudioContext;
-const audioContext = new AudioCtx();
-console.log("[Offscreen] AudioContext created, state:", audioContext.state);
+// SW keepalive — offscreen docs aren't subject to MV3's 30s idle kill. A
+// message every 20s resets the SW's idle timer, keeping the bridge WS
+// setInterval ping running under background throttle/freeze.
+setInterval(() => {
+  chrome.runtime.sendMessage({ type: "SW_KEEPALIVE" }).catch(() => {
+    // SW restarting — self-heals via setupOffscreenDocument at next startup
+  });
+}, 20_000);
+
+// AudioContext is lazy — the doc is persistent for keepalive, so avoid
+// allocating audio resources until a sound actually needs to play.
+let audioContext;
+function getAudioContext() {
+  if (!audioContext) {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    audioContext = new AudioCtx();
+    console.log("[Offscreen] AudioContext created, state:", audioContext.state);
+  }
+  return audioContext;
+}
 
 // Play audio using Web Audio API (bypasses autoplay restrictions better)
 async function playAudioWithWebAudioAPI(audioUrl, volume) {
+  const ctx = getAudioContext();
   try {
     console.log("[Offscreen] Fetching audio file:", audioUrl);
 
@@ -20,26 +37,26 @@ async function playAudioWithWebAudioAPI(audioUrl, volume) {
     console.log("[Offscreen] Audio file fetched, decoding...");
 
     // Decode the audio data
-    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+    const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
 
     console.log("[Offscreen] Audio decoded, creating source...");
 
     // Create buffer source
-    const source = audioContext.createBufferSource();
+    const source = ctx.createBufferSource();
     source.buffer = audioBuffer;
 
     // Create gain node for volume control
-    const gainNode = audioContext.createGain();
+    const gainNode = ctx.createGain();
     gainNode.gain.value = volume;
 
     // Connect nodes
     source.connect(gainNode);
-    gainNode.connect(audioContext.destination);
+    gainNode.connect(ctx.destination);
 
     // Resume audio context if needed
-    if (audioContext.state === "suspended") {
+    if (ctx.state === "suspended") {
       console.log("[Offscreen] Resuming AudioContext...");
-      await audioContext.resume();
+      await ctx.resume();
     }
 
     console.log("[Offscreen] Starting playback...");
@@ -380,6 +397,30 @@ function applyActionIndicators(canvas, action, options, scaleFactor = 1) {
   }
 }
 
+/**
+ * Pad a canvas to `width × height` with white right/bottom borders. Returns
+ * the original canvas unchanged when it already matches. Done as a separate
+ * step AFTER overlays so the progress bar / watermark stay anchored to the
+ * frame's visible edge instead of drifting into the padding strip.
+ *
+ * Mirrors `padCanvasToSize` in src/utils/gif/gifExport.ts — this file is a
+ * plain-JS public asset for the offscreen document, so it cannot import the
+ * TS module.
+ */
+function padCanvasToSize(canvas, width, height) {
+  if (canvas.width === width && canvas.height === height) {
+    return canvas;
+  }
+  const padded = document.createElement("canvas");
+  padded.width = width;
+  padded.height = height;
+  const ctx = padded.getContext("2d");
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, width, height);
+  ctx.drawImage(canvas, 0, 0);
+  return padded;
+}
+
 // ============ GIF GENERATION FUNCTION ============
 
 /**
@@ -419,13 +460,22 @@ async function generateGif(frames, options = {}) {
 
   console.log(`[Offscreen] All ${images.length} images loaded`);
 
-  const width = images[0].width;
-  const height = images[0].height;
+  // gif.js encodes against ONE fixed grid for the whole animation. Frame
+  // sizes can vary now that zoom region crops are real frames (not
+  // re-captured full screenshots) — pad smaller frames right/bottom with
+  // white to the max size so every addFrame() canvas matches the encoder
+  // dimensions.
+  const width = Math.max(...images.map((img) => img.width));
+  const height = Math.max(...images.map((img) => img.height));
 
   console.log(`[Offscreen] Enhancing frames with indicators and overlays...`);
 
   // Create enhanced canvases with all indicators and overlays
   const enhancedCanvases = images.map((img, index) => {
+    // Render the image + overlays at the IMAGE's own size first. The
+    // progress bar and watermark are bottom/right-anchored to canvas
+    // bounds — drawing them on a pre-padded canvas would push them into the
+    // white padding strip. Pad as a separate composite step below.
     const canvas = document.createElement("canvas");
     canvas.width = img.width;
     canvas.height = img.height;
@@ -477,7 +527,7 @@ async function generateGif(frames, options = {}) {
       `[Offscreen] Frame ${index + 1}/${images.length} enhanced (progress: ${Math.round(progress * 100)}%)`,
     );
 
-    return canvas;
+    return padCanvasToSize(canvas, width, height);
   });
 
   console.log(
@@ -548,9 +598,8 @@ async function generateGif(frames, options = {}) {
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.type === "PLAY_NOTIFICATION_SOUND") {
-    console.log("[Offscreen] Received PLAY_NOTIFICATION_SOUND message");
-    console.log("[Offscreen] AudioContext state:", audioContext.state);
+  if (message.type === "OFFSCREEN_PLAY_SOUND") {
+    console.log("[Offscreen] Received OFFSCREEN_PLAY_SOUND message");
 
     const volume = message.volume || 0.5;
 
@@ -565,6 +614,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       });
 
     // Return true to indicate async response
+    return true;
+  }
+
+  if (message.type === "REVOKE_BLOB_URL") {
+    URL.revokeObjectURL(message.blobUrl);
+    sendResponse({ success: true });
     return true;
   }
 

@@ -1,2 +1,0 @@
-const __vite__mapDeps=(i,m=__vite__mapDeps,d=(m.f||(m.f=["assets/index.umd-CoBP2sDX.js","assets/index-BVS4T5_D.js"])))=>i.map(i=>d[i]);
-import{_ as i}from"./permissions-CekpULR3.js";import{ao as s,ap as n}from"./SchedulingFields-Cy2LIzhx.js";import"./index-BVS4T5_D.js";import"./index-DNtFAf1k.js";function r(r){return s(this,void 0,void 0,function(){var s;return n(this,function(n){switch(n.label){case 0:return[4,i(()=>import("./index.umd-CoBP2sDX.js").then(i=>i.i),__vite__mapDeps([0,1]))];case 1:return s=n.sent(),r._plugins=s,[2]}})})}export{r as loadLegacyVideoPlugins};

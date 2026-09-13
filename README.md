@@ -20,6 +20,16 @@ Arc ブラウザ上で Claude をサイドパネルとして扱いやすくす�
 - タスクのスケジュール実行や通知を利用する
 - 必要に応じてファイル操作やダウンロード機能を利用する
 
+## ベースとなる公式拡張機能と更新手順
+
+本リポジトリは，公式の「Claude in Chrome」拡張機能（バージョン 1.0.93）のビルド済みバンドルに，Arc 向けの変更を加えたものです．主な変更点は次の通りです．
+
+- Arc に Side Panel API が無いため，サイドパネルの代わりに拡張機能ページを通常タブとして開く
+- `Claude in Chrome` 等の表示文言を `Claude in Arc` に置換する
+- `claude.ai` の画像に対する CORS ヘッダー付与と，フレーム表示のための CSP ヘッダー除去を `declarativeNetRequest` で行う
+
+公式拡張機能が更新された場合は，Chrome にインストールされた新しいビルドを作業ディレクトリへ複製し，`scripts/apply_arc_patches.py <作業ディレクトリ>` と `scripts/patch_sender_checks.py <作業ディレクトリ>` をこの順に実行してから，その内容で本リポジトリを置き換えます．後者は，サイドパネルを通常タブで代替している Arc 版でも service worker がパネルからのメッセージを受け付けるようにする修正です．
+
 ## 注意事項
 
 この拡張機能は開発者向け・検証用途のものです．公開ストアで配布される一般利用向け拡張機能ではありません．
@@ -83,6 +93,16 @@ Main use cases include:
 - Assisting browser operations while chatting with Claude
 - Using scheduled tasks and notifications
 - Using file operations and downloads when needed
+
+## Upstream Extension and Update Procedure
+
+This repository is the built bundle of the official "Claude in Chrome" extension (version 1.0.93) with Arc-specific modifications applied:
+
+- Because Arc lacks the Side Panel API, the panel page is opened as a regular tab instead
+- Display strings such as `Claude in Chrome` are replaced with `Claude in Arc`
+- `declarativeNetRequest` rules add CORS headers to `claude.ai` images and remove the CSP header so that the page can be framed
+
+When the official extension is updated, copy the new build installed in Chrome into a working directory, run `scripts/apply_arc_patches.py <working-directory>` followed by `scripts/patch_sender_checks.py <working-directory>`, and replace the contents of this repository with the result. The second script makes the service worker accept messages from the panel even though Arc hosts it in a regular tab instead of a side panel.
 
 ## Important Notes
 
