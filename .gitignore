@@ -3,3 +3,6 @@
 
 # Chrome extension runtime metadata (auto-generated when loading unpacked extension)
 _metadata/
+
+# Python bytecode
+__pycache__/
