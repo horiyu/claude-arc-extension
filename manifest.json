@@ -111,20 +111,6 @@
             "assets/agent-visual-indicator.js-CwioqiOd.js"
          ],
          "use_dynamic_url": false
-      },
-      {
-         "matches": [
-            "<all_urls>"
-         ],
-         "resources": [
-            "sidepanel.html",
-            "assets/*",
-            "sounds/*",
-            "i18n/*",
-            "icon-128.png",
-            "claude_icon.svg"
-         ],
-         "use_dynamic_url": false
       }
    ],
    "declarative_net_request": {

@@ -41,7 +41,6 @@
     "condition": {
       "urlFilter": "||claude.ai/",
       "resourceTypes": [
-        "main_frame",
         "sub_frame"
       ]
     }

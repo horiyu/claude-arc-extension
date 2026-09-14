@@ -14,6 +14,8 @@ import pathlib
 import re
 import sys
 
+if len(sys.argv) != 2 or not (pathlib.Path(sys.argv[1]) / "manifest.json").is_file():
+    sys.exit("usage: python3 %s <extension-dir>  (a copy of the official bundle containing manifest.json)" % sys.argv[0])
 W = pathlib.Path(sys.argv[1])
 
 # Exact phrases inside the JS bundles (React defaultMessage values and plain

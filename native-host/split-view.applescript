@@ -2,8 +2,9 @@
 -- ~/Library/Application Support/claude-arc/queue/ is non-empty.
 --
 -- The native host writes one file per request, named <unix-ms>-<pid>, whose
--- content is either the word "check" (probe Accessibility without touching
--- Arc) or a numeric Chrome tab id. The panel URL is rebuilt here from the
+-- content is the word "check" (probe Accessibility without touching Arc),
+-- the word "dump" (write Arc's accessibility tree to a log, for diagnosis),
+-- or a numeric Chrome tab id. The panel URL is rebuilt here from the
 -- fixed extension id, so nothing read from the queue is ever typed into Arc.
 -- The outcome is written atomically to results/<same name> as
 -- "ok <detail>" or "error <number> <message>".
@@ -61,6 +62,8 @@ on run
 					try
 						if request is "check" then
 							set outcome to "ok " & my probeAccessibility()
+						else if request is "dump" then
+							set outcome to "ok " & my dumpFrontWindow(homeDir & "Library/Logs/claude-arc-axdump.txt")
 						else if my isTabId(request) then
 							set outcome to "ok " & my openSplit("chrome-extension://" & extensionId & "/sidepanel.html?tabId=" & request)
 						else
@@ -124,6 +127,104 @@ on probeAccessibility()
 	end tell
 	return "check frontmost=" & frontName & " finder-menus=" & barCount
 end probeAccessibility
+
+-- ---------------------------------------------------------------- diagnostics
+
+-- Writes the accessibility tree of Arc's front window (web content excluded)
+-- to outPath, one element per line, so the split view structure can be read.
+on dumpFrontWindow(outPath)
+	set collected to {}
+	tell application "System Events"
+		if not (exists process "Arc") then error "Arc is not running"
+		tell process "Arc"
+			set winCount to count of windows
+			repeat with i from 1 to winCount
+				set wi to window i
+				set wname to ""
+				try
+					set wname to name of wi
+				end try
+				set end of collected to "window " & i & ": [" & wname & "] subrole=" & (value of attribute "AXSubrole" of wi) & " main=" & (value of attribute "AXMain" of wi) & " focused=" & (value of attribute "AXFocused" of wi)
+			end repeat
+			set w to front window
+		end tell
+	end tell
+	my walkElement(w, 0, collected, 16)
+	set AppleScript's text item delimiters to linefeed
+	set body to collected as text
+	set AppleScript's text item delimiters to ""
+	set fileRef to open for access (POSIX file outPath) with write permission
+	try
+		set eof fileRef to 0
+		write body & linefeed to fileRef as «class utf8»
+	end try
+	close access fileRef
+	return "dump " & (count of collected) & " elements -> " & outPath
+end dumpFrontWindow
+
+on walkElement(el, depth, collected, maxDepth)
+	set r to ""
+	set sr to ""
+	set d to ""
+	set extra to ""
+	tell application "System Events"
+		try
+			set r to value of attribute "AXRole" of el
+		end try
+		try
+			set sr to value of attribute "AXSubrole" of el
+			if sr is missing value then set sr to ""
+		end try
+		try
+			set d to value of attribute "AXDescription" of el
+			if d is missing value then set d to ""
+		end try
+		try
+			set p to value of attribute "AXPosition" of el
+			set s to value of attribute "AXSize" of el
+			set extra to extra & " pos=" & (item 1 of p) & "," & (item 2 of p) & " size=" & (item 1 of s) & "x" & (item 2 of s)
+		end try
+		try
+			set extra to extra & " children=" & (count of (value of attribute "AXChildren" of el))
+		end try
+		if depth ≤ 3 then
+			try
+				set extra to extra & " attrs=" & ((name of attributes of el) as text)
+			end try
+		end if
+		if r is "AXSplitter" or r is "AXSplitGroup" then
+			try
+				set extra to extra & " value=" & (value of attribute "AXValue" of el)
+			end try
+			try
+				set extra to extra & " min=" & (value of attribute "AXMinValue" of el) & " max=" & (value of attribute "AXMaxValue" of el)
+			end try
+			try
+				set extra to extra & " orientation=" & (value of attribute "AXOrientation" of el)
+			end try
+			try
+				set extra to extra & " settable=" & (settable of attribute "AXValue" of el)
+			end try
+			try
+				set extra to extra & " actions=" & ((name of actions of el) as text)
+			end try
+		end if
+	end tell
+	set indent to ""
+	repeat depth times
+		set indent to indent & "  "
+	end repeat
+	set end of collected to indent & r & " " & sr & " [" & d & "]" & extra
+	if depth < maxDepth and r is not "AXWebArea" then
+		set kids to {}
+		try
+			tell application "System Events" to set kids to UI elements of el
+		end try
+		repeat with k in kids
+			my walkElement(k, depth + 1, collected, maxDepth)
+		end repeat
+	end if
+end walkElement
 
 -- ---------------------------------------------------------------- split view
 
@@ -244,10 +345,11 @@ on insideWebArea(el)
 end insideWebArea
 
 -- Paste rather than type: immune to the active input method (e.g. Japanese IME).
+-- The previous clipboard contents are saved as a record and put back afterwards.
 on pasteAndGo(theURL)
 	set oldClip to missing value
 	try
-		set oldClip to (the clipboard as text)
+		set oldClip to (the clipboard as record) -- a record keeps non-text flavors (images, files) restorable
 	end try
 	set the clipboard to theURL
 	tell application "System Events" to tell process "Arc"

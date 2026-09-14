@@ -1,4 +1,6 @@
 import json, re, sys, pathlib
+if len(sys.argv) != 2 or not (pathlib.Path(sys.argv[1]) / "manifest.json").is_file():
+    sys.exit("usage: python3 %s <extension-dir>  (a copy of the official bundle containing manifest.json)" % sys.argv[0])
 W = pathlib.Path(sys.argv[1])
 
 def sub_once(path, old, new):
@@ -19,12 +21,11 @@ if "declarativeNetRequest" not in perms:
 m["permissions"] = perms
 m["declarative_net_request"] = {"rule_resources": [
     {"id": "arc-net-rules", "enabled": True, "path": "cdn-redirect-rules.json"}]}
-arc_war = {
-    "matches": ["<all_urls>"],
-    "resources": ["sidepanel.html", "assets/*", "sounds/*", "i18n/*", "icon-128.png", "claude_icon.svg"],
-    "use_dynamic_url": False}
-if arc_war not in m["web_accessible_resources"]:
-    m["web_accessible_resources"].append(arc_war)
+# The panel is reached by a user navigation (Arc's command bar) or by chrome.tabs.create from
+# the extension itself; neither needs web_accessible_resources. Keep the official entries only
+# and drop the over-broad <all_urls> entry that earlier patch runs added.
+m["web_accessible_resources"] = [
+    w for w in m.get("web_accessible_resources", []) if "sidepanel.html" not in w.get("resources", [])]
 mp.write_text(json.dumps(m, indent=3, ensure_ascii=False) + "\n", encoding="utf-8")
 
 # ---- 2. service worker: fallback when chrome.sidePanel is absent ----
@@ -109,7 +110,7 @@ rules = [
  {"id": 2, "priority": 2,
   "action": {"type": "modifyHeaders", "responseHeaders": [
      {"header": "Content-Security-Policy", "operation": "remove"}]},
-  "condition": {"urlFilter": "||claude.ai/", "resourceTypes": ["main_frame", "sub_frame"]}},
+  "condition": {"urlFilter": "||claude.ai/", "resourceTypes": ["sub_frame"]}},
 ]
 (W / "cdn-redirect-rules.json").write_text(json.dumps(rules, indent=2) + "\n", encoding="utf-8")
 print("done")

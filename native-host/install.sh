@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
-# Register the "com.claude.arc" native messaging host for Arc (and Chrome, for
-# testing) and install the launchd user agent that performs the Split View
-# automation. Run it from a Terminal inside your GUI login session; re-run
-# after moving the repository.
+# Register the "com.claude.arc" native messaging host for Arc and install the
+# launchd user agent that performs the Split View automation. Run it from a
+# Terminal inside your GUI login session; re-run after moving the repository.
+# Set WITH_CHROME=1 to also register the host with Google Chrome (developer
+# testing only: the allowed origin is the same extension id as the official
+# Claude in Chrome extension, so the default registers Arc only).
 #
 # Uninstall: launchctl bootout "gui/$(id -u)/com.claude.arc.splitview"
 #            rm ~/Library/LaunchAgents/com.claude.arc.splitview.plist
-#            rm ".../NativeMessagingHosts/com.claude.arc.json" (Arc and Chrome)
+#            rm ".../NativeMessagingHosts/com.claude.arc.json" (Arc; and Chrome if WITH_CHROME=1 was used)
+#            remove /usr/bin/osascript from System Settings > Privacy & Security > Accessibility
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -19,20 +22,37 @@ PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 BASE="$HOME/Library/Application Support/claude-arc"
 DOMAIN="gui/$(id -u)"
 
+# Escape user-controlled paths for the JSON manifest and the XML plist.
+json_esc() { sed 's/\\/\\\\/g; s/"/\\"/g'; }
+xml_esc()  { sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g'; }
+
 chmod +x "$HOST"
+
+# Arc starts the host with the login session's PATH, not the shell's; probe it the same way.
+ARC_PATH="$(launchctl getenv PATH 2>/dev/null || true)"
+ARC_PATH="${ARC_PATH:-/usr/bin:/bin:/usr/sbin:/sbin}"
+if ! printf '\x12\x00\x00\x00{"command":"ping"}' \
+  | env -i PATH="$ARC_PATH" HOME="$HOME" "$HOST" 2>/dev/null | tail -c +5 | grep -q '"pong": true'; then
+  echo "error: $HOST does not start with the PATH Arc uses ($ARC_PATH)." >&2
+  echo "Install Python 3 where that PATH can find it (e.g. xcode-select --install) and run this script again." >&2
+  exit 1
+fi
+
 mkdir -p "$BASE" "$HOME/Library/LaunchAgents"
 chmod 700 "$BASE"
 mkdir -p "$BASE/queue" "$BASE/results"
 
-for dir in \
-  "$HOME/Library/Application Support/Arc/NativeMessagingHosts" \
-  "$HOME/Library/Application Support/Google/Chrome/NativeMessagingHosts"; do
+DIRS=("$HOME/Library/Application Support/Arc/NativeMessagingHosts")
+if [ "${WITH_CHROME:-0}" = 1 ]; then
+  DIRS+=("$HOME/Library/Application Support/Google/Chrome/NativeMessagingHosts")
+fi
+for dir in "${DIRS[@]}"; do
   mkdir -p "$dir"
   cat > "$dir/com.claude.arc.json" <<EOF
 {
   "name": "com.claude.arc",
   "description": "Claude Arc Split View Helper",
-  "path": "$HOST",
+  "path": "$(printf '%s' "$HOST" | json_esc)",
   "type": "stdio",
   "allowed_origins": [
     "chrome-extension://$EXTENSION_ID/"
@@ -55,18 +75,18 @@ cat > "$PLIST" <<EOF
   <key>ProgramArguments</key>
   <array>
     <string>/usr/bin/osascript</string>
-    <string>$SCRIPT</string>
+    <string>$(printf '%s' "$SCRIPT" | xml_esc)</string>
   </array>
   <key>QueueDirectories</key>
   <array>
-    <string>$BASE/queue</string>
+    <string>$(printf '%s' "$BASE" | xml_esc)/queue</string>
   </array>
   <key>ThrottleInterval</key>
   <integer>1</integer>
   <key>LimitLoadToSessionType</key>
   <string>Aqua</string>
   <key>StandardErrorPath</key>
-  <string>$HOME/Library/Logs/claude-arc-splitview.err.log</string>
+  <string>$(printf '%s' "$HOME" | xml_esc)/Library/Logs/claude-arc-splitview.err.log</string>
 </dict>
 </plist>
 EOF
@@ -108,7 +128,8 @@ case "$OUTCOME" in
     echo "Automation consent is missing: allow osascript to control System Events"
     echo "(System Settings > Privacy & Security > Automation), then run this script again." ;;
   "")
-    echo "No answer from the launch agent within 25 s. See ~/Library/Logs/claude-arc-splitview.err.log" ;;
+    echo "No answer from the launch agent within 25 s. If a permission dialog was showing, answer it"
+    echo "and run this script again; otherwise see ~/Library/Logs/claude-arc-splitview.err.log" ;;
   *)
     echo "Probe failed: $OUTCOME" ;;
 esac
