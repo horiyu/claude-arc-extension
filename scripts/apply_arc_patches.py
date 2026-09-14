@@ -117,7 +117,15 @@ TABGROUPS_JS = (
  'def(chrome.tabGroups,"query",(q,cb)=>withCb((async()=>{await ready;const f=q||{};return[...groups.values()].filter((g)=>(f.windowId===undefined||g.windowId===f.windowId)&&(f.title===undefined||g.title===f.title)&&(f.color===undefined||g.color===f.color)&&(f.collapsed===undefined||g.collapsed===f.collapsed)).map((g)=>({...g}));})(),cb));'
  'def(chrome.tabGroups,"update",(gid,p,cb)=>withCb((async()=>{await ready;const g=groups.get(gid);if(!g)throw new Error("No group with id: "+gid);Object.assign(g,p||{});persist();return{...g};})(),cb));'
  'def(chrome.tabGroups,"move",(gid,p,cb)=>withCb((async()=>{await ready;const g=groups.get(gid);if(!g)throw new Error("No group with id: "+gid);return{...g};})(),cb));'
- 'chrome.tabs.onRemoved.addListener((id)=>{if(tabToGroup.delete(id)){gc();persist();}});'
+ 'chrome.tabs.onRemoved.addListener((id)=>{ready.then(()=>{if(tabToGroup.delete(id)){gc();persist();}});});'
+ # Chrome places a tab opened from a grouped tab (target=_blank, window.open) into the same group
+ # (the event may be what woke the service worker, so wait for the persisted state first).
+ # In an Arc Split View the opener is often the focused pane, i.e. the panel tab, rather than
+ # the page tab that was clicked; map a panel tab back to its page tab via the _arcPanel_ keys.
+ 'chrome.tabs.onCreated.addListener((t)=>{ready.then(async()=>{if(!t||typeof t.id!=="number"||typeof t.openerTabId!=="number")return;'
+ 'let gid=tabToGroup.get(t.openerTabId);'
+ 'if(gid===undefined){try{const all=await chrome.storage.session.get(null);for(const k of Object.keys(all)){if(k.startsWith("_arcPanel_")&&all[k]===t.openerTabId){const page=Number(k.slice(10));if(tabToGroup.has(page)){gid=tabToGroup.get(page);break;}}}}catch(_){}}'
+ 'if(gid!==undefined){tabToGroup.set(t.id,gid);persist();}});});'
  '})();/*__ARC_TABGROUPS_END__*/')
 s = sw.read_text(encoding="utf-8")
 if "__ARC_TABGROUPS_BEGIN__" in s:
