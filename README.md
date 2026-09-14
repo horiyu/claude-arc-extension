@@ -9,6 +9,10 @@
 > [!WARNING]
 > このリポジトリは非公式・実験的なものです．Anthropic，Claude，The Browser Company，Arc とは関係ありません．
 
+![Arc の Split View で開いた Claude のパネルが，隣のタブの GitHub ページを操作している様子](docs/demo.png)
+
+左が操作対象のタブ，右が Split View で開いた Claude のパネルです．パネルからの指示で，隣のタブのページを読み取り，操作できます．
+
 ## 概要
 
 この拡張機能は，Arc の拡張機能として Claude を開き，ブラウザ内での作業を補助することを目的としています．
@@ -152,6 +156,10 @@ An unofficial, personal-use build of the official "Claude in Chrome" extension w
 
 > [!WARNING]
 > This repository is unofficial and experimental. It is not affiliated with Anthropic, Claude, The Browser Company, or Arc.
+
+![The Claude panel opened in an Arc Split View pane, working on the GitHub page in the neighbouring tab](docs/demo.png)
+
+Left: the tab being worked on. Right: the Claude panel opened in a Split View pane. Instructions given in the panel read and operate the page in the neighbouring tab.
 
 ## Overview
 
