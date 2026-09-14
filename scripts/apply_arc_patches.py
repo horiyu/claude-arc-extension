@@ -90,6 +90,64 @@ if old_d in s:
     s = s.replace(old_e, 'else n({success:!1})})():n({success:!1});var r,i}')
 sw.write_text(s, encoding="utf-8")
 
+
+# ---- 2c. service worker: emulate Chrome tab groups ----
+# Arc's chrome.tabs.group / ungroup and chrome.tabGroups.* never settle their promises, and the
+# Cowork panel cannot initialise without an "anchor" tab group. This shim keeps groups in memory
+# (persisted to chrome.storage.session so they survive service-worker restarts) and decorates
+# chrome.tabs.get / query results with the emulated groupId. Only installed when chrome.sidePanel
+# is absent, i.e. on Arc.
+TABGROUPS_JS = (
+ '/*__ARC_TABGROUPS_BEGIN__*/(()=>{if(chrome.sidePanel||globalThis.__arcTabGroupsShim)return;globalThis.__arcTabGroupsShim=true;'
+ 'const NONE=-1,KEY="_arcTabGroups",groups=new Map(),tabToGroup=new Map();let nextId=1000000;'
+ 'const ready=(async()=>{try{const s=(await chrome.storage.session.get(KEY))[KEY];if(s){nextId=s.nextId||nextId;for(const g of s.groups||[])groups.set(g.id,g);for(const[t,g]of s.tabs||[])tabToGroup.set(t,g);}}catch(_){}})();'
+ 'const persist=()=>{chrome.storage.session.set({[KEY]:{nextId,groups:[...groups.values()],tabs:[...tabToGroup.entries()]}}).catch(()=>{});};'
+ 'const gc=()=>{const used=new Set(tabToGroup.values());for(const id of[...groups.keys()])if(!used.has(id))groups.delete(id);};'
+ 'const decorate=(t)=>{if(t&&typeof t.id==="number")t.groupId=tabToGroup.has(t.id)?tabToGroup.get(t.id):NONE;return t;};'
+ 'const withCb=(p,cb)=>typeof cb==="function"?(p.then((r)=>cb(r),()=>cb(undefined)),undefined):p;'
+ 'const origGet=chrome.tabs.get.bind(chrome.tabs),origQuery=chrome.tabs.query.bind(chrome.tabs);'
+ 'const def=(o,n,f)=>{try{Object.defineProperty(o,n,{value:f,configurable:true,writable:true});}catch(_){try{o[n]=f;}catch(__){}}};'
+ 'def(chrome.tabs,"get",(id,cb)=>withCb((async()=>{await ready;return decorate(await origGet(id));})(),cb));'
+ 'def(chrome.tabs,"query",(q,cb)=>withCb((async()=>{await ready;const{groupId,...rest}=q||{};let tabs=(await origQuery(rest)).map(decorate);if(groupId!==undefined)tabs=tabs.filter((t)=>t.groupId===groupId);return tabs;})(),cb));'
+ 'def(chrome.tabs,"group",(o,cb)=>withCb((async()=>{await ready;const ids=Array.isArray(o.tabIds)?o.tabIds:[o.tabIds];let gid=o.groupId;'
+ 'if(gid===undefined||!groups.has(gid)){gid=nextId++;let wid=o.createProperties&&o.createProperties.windowId;if(wid===undefined){try{wid=(await origGet(ids[0])).windowId;}catch(_){wid=-1;}}groups.set(gid,{id:gid,windowId:wid,title:"",color:"grey",collapsed:false,shared:false});}'
+ 'for(const id of ids)tabToGroup.set(id,gid);gc();persist();return gid;})(),cb));'
+ 'def(chrome.tabs,"ungroup",(ids,cb)=>withCb((async()=>{await ready;for(const id of(Array.isArray(ids)?ids:[ids]))tabToGroup.delete(id);gc();persist();})(),cb));'
+ 'def(chrome.tabGroups,"get",(gid,cb)=>withCb((async()=>{await ready;const g=groups.get(gid);if(!g)throw new Error("No group with id: "+gid);return{...g};})(),cb));'
+ 'def(chrome.tabGroups,"query",(q,cb)=>withCb((async()=>{await ready;const f=q||{};return[...groups.values()].filter((g)=>(f.windowId===undefined||g.windowId===f.windowId)&&(f.title===undefined||g.title===f.title)&&(f.color===undefined||g.color===f.color)&&(f.collapsed===undefined||g.collapsed===f.collapsed)).map((g)=>({...g}));})(),cb));'
+ 'def(chrome.tabGroups,"update",(gid,p,cb)=>withCb((async()=>{await ready;const g=groups.get(gid);if(!g)throw new Error("No group with id: "+gid);Object.assign(g,p||{});persist();return{...g};})(),cb));'
+ 'def(chrome.tabGroups,"move",(gid,p,cb)=>withCb((async()=>{await ready;const g=groups.get(gid);if(!g)throw new Error("No group with id: "+gid);return{...g};})(),cb));'
+ 'chrome.tabs.onRemoved.addListener((id)=>{if(tabToGroup.delete(id)){gc();persist();}});'
+ '})();/*__ARC_TABGROUPS_END__*/')
+s = sw.read_text(encoding="utf-8")
+if "__ARC_TABGROUPS_BEGIN__" in s:
+    s = re.sub(r"/\*__ARC_TABGROUPS_BEGIN__\*/.*?/\*__ARC_TABGROUPS_END__\*/", lambda _: TABGROUPS_JS, s, count=1, flags=re.S)
+else:
+    s = TABGROUPS_JS + s  # import declarations are hoisted, so code before them is fine
+sw.write_text(s, encoding="utf-8")
+
+
+# ---- 2d. tool executor: inject the accessibility-tree content script on demand ----
+# Manifest content scripts only run on navigations that happen after the extension is loaded.
+# Pages that were already open report "Page script returned empty result" (Arc surfaces the
+# thrown "Accessibility tree function not found" as a null result). Before running a page
+# function that needs window.__generateAccessibilityTree, check for it and inject the manifest's
+# accessibility-tree script into the main frame when it is missing.
+ENSURE_A11Y_JS = (
+ '/*__ARC_ENSURE_A11Y_BEGIN__*/async function __arcEnsureA11y(e){try{'
+ 'if(!e||!e.func||!e.target||!String(e.func).includes("__generateAccessibilityTree"))return;'
+ 'const p=await chrome.scripting.executeScript({target:e.target,func:()=>typeof window.__generateAccessibilityTree==="function"});'
+ 'if(p&&p[0]&&p[0].result===true)return;'
+ 'const cs=(chrome.runtime.getManifest().content_scripts||[]).find((c)=>(c.js||[]).some((f)=>f.includes("accessibility-tree")));'
+ 'if(!cs)return;await chrome.scripting.executeScript({target:e.target,files:cs.js});}catch(_){}}/*__ARC_ENSURE_A11Y_END__*/')
+mcp = next((W / "assets").glob("mcpPermissions-*.js"))
+m = mcp.read_text(encoding="utf-8")
+if "__ARC_ENSURE_A11Y_BEGIN__" not in m:
+    old = "async function Ae(e,t=j){let r;try{return await Promise.race([chrome.scripting.executeScript(e),"
+    assert m.count(old) == 1, "executeScript wrapper Ae not found"
+    m = m.replace(old, ENSURE_A11Y_JS + "async function Ae(e,t=j){await __arcEnsureA11y(e);let r;try{return await Promise.race([chrome.scripting.executeScript(e),")
+    mcp.write_text(m, encoding="utf-8")
+
 # ---- 3. branding strings ----
 count = 0
 for p in list(W.rglob("*.js")) + list(W.rglob("*.json")) + list(W.rglob("*.html")):

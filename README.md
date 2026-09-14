@@ -27,6 +27,8 @@
 - Arc に Side Panel API が無いため，サイドパネルの代わりに拡張機能ページを通常タブとして開く
 - `Claude in Chrome` 等の表示文言を `Claude in Arc` に置換する
 - `declarativeNetRequest` で，`claude.ai/images/*` の応答に CORS ヘッダーを付与し，`claude.ai` の iframe（`sub_frame`）応答から `Content-Security-Policy` ヘッダーを除去する（パネル内で claude.ai を iframe 表示するため）．通常のタブで開いた claude.ai には適用しない
+- Arc では `chrome.tabs.group` などタブグループ API の Promise が解決しないため，service worker 内でタブグループを擬似的に実装する（パネルと拡張機能の初期化はタブグループを前提としており，これが無いとブラウザ操作がすべてタイムアウトする）
+- 拡張機能の読み込み前から開いていたページには，ページ読み取り用の補助スクリプトを実行時に注入する（公式版では該当ページの再読み込みが必要）
 - 任意で，同梱のネイティブホストにより Arc の Split View としてパネルを開く（後述）
 
 バンドル本体（`assets/`，`i18n/`，`sounds/`，`manifest.json` ほかリポジトリ直下のファイル）は，Anthropic が配布する同拡張機能（拡張機能 ID `fcoeoabgfenejglbffodgkkbkcdhcgfn`）の複製であり，本リポジトリの作者はこれらのファイルについて権利を主張しません．バンドルには gif.js や KaTeX フォントなど，それぞれのライセンスに従う第三者製コンポーネントも含まれます．上流との差分は，次節のスクリプトが書き換えるファイル（`manifest.json`，`sidepanel.html`，`managed_schema.json`，`i18n/*.json`，および `assets/` 内の service worker，ツール実行部，表示文言を含むいくつかのチャンク）と，本リポジトリで追加した `cdn-redirect-rules.json`，`native-host/`，`scripts/`，`README.md`，`.gitignore` に限られます．`git-hash.txt` は上流ビルドに含まれるコミットハッシュであり，本リポジトリのものではありません．
@@ -41,7 +43,7 @@ python3 scripts/patch_sender_checks.py <作業ディレクトリ>
 python3 scripts/rebrand_chrome_strings.py <作業ディレクトリ>
 ```
 
-1 つ目はマニフェスト，通常タブへのフォールバック，ネットワークルールを適用します．2 つ目は，サイドパネルを通常タブで代替している Arc 版でも service worker がパネルからのメッセージを受け付けるようにする修正です．3 つ目は，画面に表示される「Chrome」の表記を「Arc」に置き換えます．実行後，本リポジトリのうち `scripts/`，`native-host/`，`README.md`，`.gitignore` 以外を作業ディレクトリの内容で置き換えます（新しいビルドに無くなったファイルは削除します）．
+1 つ目はマニフェスト，通常タブへのフォールバック，タブグループの擬似実装，補助スクリプトの注入，ネットワークルールを適用します．2 つ目は，サイドパネルを通常タブで代替している Arc 版でも service worker がパネルからのメッセージを受け付けるようにする修正です．3 つ目は，画面に表示される「Chrome」の表記を「Arc」に置き換えます．実行後，本リポジトリのうち `scripts/`，`native-host/`，`README.md`，`.gitignore` 以外を作業ディレクトリの内容で置き換えます（新しいビルドに無くなったファイルは削除します）．
 
 最初の 2 つのスクリプトは minify された識別子を文字列一致で探して書き換えるため，公式ビルド側のコードが変わると `AssertionError` で停止します．その場合はスクリプト内の検索パターンを新しいビルドに合わせて更新してください．3 つ目は見つからない語句を読み飛ばすだけで停止しないため，出力される置換件数を確認し，残った「Chrome」表記があれば語句リストに追加してください．
 
@@ -169,6 +171,8 @@ This repository is the built bundle of the official "Claude in Chrome" extension
 - Because Arc lacks the Side Panel API, the panel page is opened as a regular tab instead
 - Display strings such as `Claude in Chrome` are replaced with `Claude in Arc`
 - `declarativeNetRequest` rules add CORS headers to `claude.ai/images/*` responses and remove the `Content-Security-Policy` header from iframe (`sub_frame`) responses of `claude.ai` so that claude.ai can be framed inside the panel. Top-level claude.ai tabs are not affected
+- Arc never settles the promises of the tab-group APIs (`chrome.tabs.group` and friends), so tab groups are emulated inside the service worker; the panel's initialisation depends on a tab group, and without this every browser action times out
+- Pages that were open before the extension loaded get the page-reading helper script injected on demand (the official build asks you to reload such pages)
 - Optionally, a bundled native host opens the panel as an Arc Split View pane (see below)
 
 The bundle itself (`assets/`, `i18n/`, `sounds/`, `manifest.json` and the other files at the repository root) is a copy of that extension as distributed by Anthropic (extension ID `fcoeoabgfenejglbffodgkkbkcdhcgfn`); the author of this repository claims no rights over these files. The bundle also contains third-party components such as gif.js and the KaTeX fonts, each under its own license. The differences from upstream are limited to the files rewritten by the scripts described in the next section (`manifest.json`, `sidepanel.html`, `managed_schema.json`, `i18n/*.json`, and a few chunks in `assets/`: the service worker, the tool executor, and chunks containing user-facing strings) plus the files added by this repository (`cdn-redirect-rules.json`, `native-host/`, `scripts/`, `README.md`, `.gitignore`). `git-hash.txt` is the commit hash shipped with the upstream build, not one of this repository.
@@ -183,7 +187,7 @@ python3 scripts/patch_sender_checks.py <working-directory>
 python3 scripts/rebrand_chrome_strings.py <working-directory>
 ```
 
-The first applies the manifest changes, the regular-tab fallback, and the network rules. The second makes the service worker accept messages from the panel even though Arc hosts it in a regular tab instead of a side panel. The third replaces user-facing "Chrome" wording with "Arc". Then replace everything in this repository except `scripts/`, `native-host/`, `README.md`, and `.gitignore` with the contents of the working directory (deleting files that no longer exist in the new build).
+The first applies the manifest changes, the regular-tab fallback, the tab-group emulation, the on-demand script injection, and the network rules. The second makes the service worker accept messages from the panel even though Arc hosts it in a regular tab instead of a side panel. The third replaces user-facing "Chrome" wording with "Arc". Then replace everything in this repository except `scripts/`, `native-host/`, `README.md`, and `.gitignore` with the contents of the working directory (deleting files that no longer exist in the new build).
 
 The first two scripts locate minified identifiers by exact string match and stop with an `AssertionError` when the upstream code has changed; update the search patterns in the scripts for the new build in that case. The third only skips phrases it cannot find, so check the replacement counts it prints and add any remaining "Chrome" wording to its phrase list.
 
