@@ -4,14 +4,14 @@
 
 ## 日本語
 
-公式の「Claude in Chrome」拡張機能のビルド済みバンドルに，Side Panel API を持たない Arc ブラウザで動作させるための変更を加えた，個人利用向けの非公式ビルドです．Claude のパネルは通常タブとして，または任意で Arc の Split View のペインとして開きます．
+公式の「Claude in Chrome」拡張機能を，Side Panel API を持たない Arc ブラウザで動かすための，個人利用向けの非公式パッチ集です．利用者が自分で入手した公式拡張機能に手元でパッチを当てて Arc 版を生成します．本リポジトリに Anthropic の配布物は含まれていません．生成した Claude のパネルは通常タブとして，または任意で Arc の Split View のペインとして開きます．
 
 > [!WARNING]
 > このリポジトリは非公式・実験的なものです．Anthropic，Claude，The Browser Company，Arc とは関係ありません．
 
 ![Arc の Split View で開いた Claude のパネルが，隣のタブの GitHub ページを操作している様子](docs/demo.png)
 
-左が操作対象のタブ，右が Split View で開いた Claude のパネルです．パネルからの指示で，隣のタブのページを読み取り，操作できます．
+左が操作対象のタブ，右が Split View で開いた Claude のパネルです．パネルからの指示で，隣のタブのページを読み取り，操作できます．操作中のタブにはオレンジ色の枠と「Stop Claude」ボタンが表示されます．
 
 ## 概要
 
@@ -24,9 +24,9 @@
 - タスクのスケジュール実行や通知を利用する
 - 必要に応じてファイル操作やダウンロード機能を利用する
 
-## ベースとなる公式拡張機能と変更点
+## 仕組みと変更点
 
-本リポジトリは，公式の「Claude in Chrome」拡張機能（バージョン 1.0.93）のビルド済みバンドルに，Arc 向けの変更を加えたものです．主な変更点は次の通りです．
+`build.sh` は，Chrome（または Arc）にインストール済みの公式「Claude in Chrome」拡張機能（拡張機能 ID `fcoeoabgfenejglbffodgkkbkcdhcgfn`）を `build/` に複製し，`scripts/` の 3 つのスクリプトで次の変更を加えます．公式拡張機能はバージョン 1.0.93 で確認しています．
 
 - Arc に Side Panel API が無いため，サイドパネルの代わりに拡張機能ページを通常タブとして開く
 - `Claude in Chrome` 等の表示文言を `Claude in Arc` に置換する
@@ -35,27 +35,15 @@
 - 拡張機能の読み込み前から開いていたページには，ページ読み取り用の補助スクリプトを実行時に注入する（公式版では該当ページの再読み込みが必要）
 - 任意で，同梱のネイティブホストにより Arc の Split View としてパネルを開く（後述）
 
-バンドル本体（`assets/`，`i18n/`，`sounds/`，`manifest.json` ほかリポジトリ直下のファイル）は，Anthropic が配布する同拡張機能（拡張機能 ID `fcoeoabgfenejglbffodgkkbkcdhcgfn`）の複製であり，本リポジトリの作者はこれらのファイルについて権利を主張しません．バンドルには gif.js や KaTeX フォントなど，それぞれのライセンスに従う第三者製コンポーネントも含まれます．上流との差分は，次節のスクリプトが書き換えるファイル（`manifest.json`，`sidepanel.html`，`managed_schema.json`，`i18n/*.json`，および `assets/` 内の service worker，ツール実行部，表示文言を含むいくつかのチャンク）と，本リポジトリで追加した `cdn-redirect-rules.json`，`native-host/`，`scripts/`，`README.md`，`.gitignore` に限られます．`git-hash.txt` は上流ビルドに含まれるコミットハッシュであり，本リポジトリのものではありません．
+スクリプトの役割は次の通りです．`apply_arc_patches.py` はマニフェスト，通常タブへのフォールバック，タブグループの擬似実装，補助スクリプトの注入，ネットワークルールを適用します．`patch_sender_checks.py` は，サイドパネルを通常タブで代替している Arc 版でも service worker がパネルからのメッセージを受け付けるようにします．`rebrand_chrome_strings.py` は，画面に表示される「Chrome」の表記を「Arc」に置き換えます．いずれも `build/` 内のファイルだけを書き換え，公式拡張機能のインストール先には触れません．
 
-## 公式ビルドの更新に追従する手順
-
-公式拡張機能が更新された場合は，Chrome にインストールされた新しいビルド（macOS では `~/Library/Application Support/Google/Chrome/<プロファイル>/Extensions/fcoeoabgfenejglbffodgkkbkcdhcgfn/<バージョン>_0/`．Chrome が生成する `_metadata/` は複製不要）を作業ディレクトリへ複製し，次の 3 つをこの順に実行します．
-
-```
-python3 scripts/apply_arc_patches.py <作業ディレクトリ>
-python3 scripts/patch_sender_checks.py <作業ディレクトリ>
-python3 scripts/rebrand_chrome_strings.py <作業ディレクトリ>
-```
-
-1 つ目はマニフェスト，通常タブへのフォールバック，タブグループの擬似実装，補助スクリプトの注入，ネットワークルールを適用します．2 つ目は，サイドパネルを通常タブで代替している Arc 版でも service worker がパネルからのメッセージを受け付けるようにする修正です．3 つ目は，画面に表示される「Chrome」の表記を「Arc」に置き換えます．実行後，本リポジトリのうち `scripts/`，`native-host/`，`README.md`，`.gitignore` 以外を作業ディレクトリの内容で置き換えます（新しいビルドに無くなったファイルは削除します）．
-
-最初の 2 つのスクリプトは minify された識別子を文字列一致で探して書き換えるため，公式ビルド側のコードが変わると `AssertionError` で停止します．その場合はスクリプト内の検索パターンを新しいビルドに合わせて更新してください．3 つ目は見つからない語句を読み飛ばすだけで停止しないため，出力される置換件数を確認し，残った「Chrome」表記があれば語句リストに追加してください．
+生成物 `build/` は，利用者自身が入手した公式拡張機能の複製にパッチを当てたものです．その権利は Anthropic および各コンポーネント（gif.js や KaTeX フォントなど）の元の著作権者に帰属します．本リポジトリの作者が権利を有するのは `scripts/`，`native-host/`，`build.sh` および Arc 向けの変更内容に限られ，`build/` は `.gitignore` により追跡対象外です．
 
 ## 注意事項
 
 この拡張機能は開発者向け・検証用途のものです．公開ストアで配布される一般利用向け拡張機能ではありません．
 
-また，`manifest.json` では以下のような強い権限を要求します（完全な一覧は `manifest.json` の `permissions` を参照してください）．
+また，生成される `manifest.json` は以下のような強い権限を要求します（完全な一覧は `manifest.json` の `permissions` を参照してください）．
 
 - `host_permissions: ["<all_urls>"]`
 - `debugger`
@@ -76,22 +64,25 @@ python3 scripts/rebrand_chrome_strings.py <作業ディレクトリ>
 
 ### 前提条件
 
-- Arc（macOS 版で確認）．拡張機能本体はこれだけで動きます
+- macOS と Arc
+- 同じ Mac の Chrome（または Arc）に，Chrome Web Store から公式の「Claude in Chrome」拡張機能がインストールされていること．`build.sh` はそこから複製します
+- Python 3（`build.sh` と，Split View 連携のネイティブホストが使います）．`/usr/bin/python3`（Xcode Command Line Tools），python.org 版，Homebrew 版のいずれかで構いません．`/usr/bin/python3` は Xcode の更新後にライセンス再同意（`sudo xcodebuild -license accept`）を求めて停止することがありますが，他の Python があればそちらが使われます
 - claude.ai のアカウント．パネルは有料プランを要求します
-- Split View 連携を使う場合は macOS と Python 3．ホストの起動スクリプト（`native-host/claude-arc-host`）が `/usr/bin/python3`（Xcode Command Line Tools），python.org 版，Homebrew 版の順に，実際に起動できるものを選びます．`/usr/bin/python3` は Xcode の更新後にライセンス再同意（`sudo xcodebuild -license accept`）を求めて停止することがありますが，他の Python があればそちらが使われます．`install.sh` が Arc と同じ条件で起動を確認します
 
 ### 手順
 
 1. このリポジトリをローカルに clone する
-2. Arc を開き，アドレスバーに `arc://extensions` と入力する
-3. 右上の「デベロッパーモード」を有効化する
-4. 「パッケージ化されていない拡張機能を読み込む」をクリックする
-5. このリポジトリのディレクトリを選択する
+2. `bash build.sh` を実行する．公式拡張機能の最新版を探して `build/` に Arc 版を生成する．複数のプロファイルにある場合は最も新しいバージョンを使う．別の場所にある場合は `bash build.sh <公式拡張機能のディレクトリ>` と指定する
+3. Arc を開き，アドレスバーに `arc://extensions` と入力する
+4. 右上の「デベロッパーモード」を有効化する
+5. 「パッケージ化されていない拡張機能を読み込む」をクリックし，`build/` を選択する
 6. ツールバーの Claude アイコンをクリックする（Cmd+E でも開く）．パネルは通常タブとして開き，claude.ai へのサインインを求められる
 
-ビルド工程はありません．clone したディレクトリをそのまま読み込めば動作します．`manifest.json` に公開鍵が含まれているため，拡張機能 ID はどのディレクトリから読み込んでも同じです．隣のペインに開きたい場合は次節の設定を追加してください．
+生成物の `manifest.json` には公式版の公開鍵が含まれているため，拡張機能 ID は公式版と同じになり，どのディレクトリから読み込んでも変わりません．隣のペインに開きたい場合は次節の設定を追加してください．
 
-拡張機能を外すには，`arc://extensions` で「削除」を押してから，clone したディレクトリを削除します．先にディレクトリを消すと一覧に壊れた項目が残ります．Split View 連携を登録している場合は次節の解除手順も実行してください．
+公式拡張機能が Chrome 側で更新されたら，`bash build.sh` を再実行し，`arc://extensions` で再読み込みしてください．最初の 2 つのスクリプトは minify された識別子を文字列一致で探して書き換えるため，公式ビルド側のコードが変わると `AssertionError` で停止します．その場合はスクリプト内の検索パターンを新しいビルドに合わせて更新してください．3 つ目は見つからない語句を読み飛ばすだけで停止しないため，出力される置換件数を確認し，残った「Chrome」表記があれば語句リストに追加してください．
+
+拡張機能を外すには，`arc://extensions` で「削除」を押してから，`build/` を削除します．先にディレクトリを消すと一覧に壊れた項目が残ります．Split View 連携を登録している場合は次節の解除手順も実行してください．
 
 ## Split View で開く（任意）
 
@@ -132,7 +123,7 @@ rm -f ~/Library/Logs/claude-arc-host.log ~/Library/Logs/claude-arc-splitview.err
 
 ## 利用前に確認すること
 
-- 拡張機能の権限を確認してください
+- 生成される拡張機能の権限を確認してください
 - 機密情報を扱うページで利用しないでください
 - 重要な作業環境や本番環境では利用しないでください
 - Claude，Arc，Chrome の仕様変更により動作しなくなる可能性があります
@@ -145,21 +136,21 @@ rm -f ~/Library/Logs/claude-arc-host.log ~/Library/Logs/claude-arc-splitview.err
 ## ライセンス
 
 現時点ではライセンスを明示していません．
-同梱の拡張機能本体（`assets/`，`i18n/`，`manifest.json` など公式ビルド由来のファイル）の権利は Anthropic および各コンポーネントの元の著作権者に帰属し，本リポジトリの作者が権利を有するのは `scripts/`，`native-host/` および Arc 向けの変更部分に限られます．
+本リポジトリに含まれるのは `scripts/`，`native-host/`，`build.sh` と文書だけであり，公式拡張機能の複製は含まれていません．`build.sh` が生成する `build/` の権利は Anthropic および各コンポーネントの元の著作権者に帰属するため，生成物を再配布しないでください．
 明示的な許可なく，本リポジトリの内容を再配布・商用利用しないでください．
 
 ---
 
 ## English
 
-An unofficial, personal-use build of the official "Claude in Chrome" extension with patches that make it run in Arc Browser, which lacks the Side Panel API. The Claude panel opens as a regular tab or, optionally, in an Arc Split View pane.
+An unofficial, personal-use set of patches that makes the official "Claude in Chrome" extension run in Arc Browser, which lacks the Side Panel API. You patch your own copy of the official extension locally to produce the Arc build; this repository contains nothing distributed by Anthropic. The generated Claude panel opens as a regular tab or, optionally, in an Arc Split View pane.
 
 > [!WARNING]
 > This repository is unofficial and experimental. It is not affiliated with Anthropic, Claude, The Browser Company, or Arc.
 
 ![The Claude panel opened in an Arc Split View pane, working on the GitHub page in the neighbouring tab](docs/demo.png)
 
-Left: the tab being worked on. Right: the Claude panel opened in a Split View pane. Instructions given in the panel read and operate the page in the neighbouring tab.
+Left: the tab being worked on. Right: the Claude panel opened in a Split View pane. Instructions given in the panel read and operate the page in the neighbouring tab. The tab being operated shows an orange border and a "Stop Claude" button.
 
 ## Overview
 
@@ -172,9 +163,9 @@ Main use cases include:
 - Using scheduled tasks and notifications
 - Using file operations and downloads when needed
 
-## Upstream Extension and Modifications
+## How It Works and What Is Changed
 
-This repository is the built bundle of the official "Claude in Chrome" extension (version 1.0.93) with Arc-specific modifications applied:
+`build.sh` copies the official "Claude in Chrome" extension (extension ID `fcoeoabgfenejglbffodgkkbkcdhcgfn`) installed in Chrome (or Arc) into `build/` and applies the following changes with the three scripts in `scripts/`. Verified against version 1.0.93 of the official extension.
 
 - Because Arc lacks the Side Panel API, the panel page is opened as a regular tab instead
 - Display strings such as `Claude in Chrome` are replaced with `Claude in Arc`
@@ -183,27 +174,15 @@ This repository is the built bundle of the official "Claude in Chrome" extension
 - Pages that were open before the extension loaded get the page-reading helper script injected on demand (the official build asks you to reload such pages)
 - Optionally, a bundled native host opens the panel as an Arc Split View pane (see below)
 
-The bundle itself (`assets/`, `i18n/`, `sounds/`, `manifest.json` and the other files at the repository root) is a copy of that extension as distributed by Anthropic (extension ID `fcoeoabgfenejglbffodgkkbkcdhcgfn`); the author of this repository claims no rights over these files. The bundle also contains third-party components such as gif.js and the KaTeX fonts, each under its own license. The differences from upstream are limited to the files rewritten by the scripts described in the next section (`manifest.json`, `sidepanel.html`, `managed_schema.json`, `i18n/*.json`, and a few chunks in `assets/`: the service worker, the tool executor, and chunks containing user-facing strings) plus the files added by this repository (`cdn-redirect-rules.json`, `native-host/`, `scripts/`, `README.md`, `.gitignore`). `git-hash.txt` is the commit hash shipped with the upstream build, not one of this repository.
+The scripts: `apply_arc_patches.py` applies the manifest changes, the regular-tab fallback, the tab-group emulation, the on-demand script injection, and the network rules. `patch_sender_checks.py` makes the service worker accept messages from the panel even though Arc hosts it in a regular tab instead of a side panel. `rebrand_chrome_strings.py` replaces user-facing "Chrome" wording with "Arc". All of them rewrite files under `build/` only and never touch the official installation.
 
-## Following Upstream Updates
-
-When the official extension is updated, copy the new build installed in Chrome (on macOS: `~/Library/Application Support/Google/Chrome/<Profile>/Extensions/fcoeoabgfenejglbffodgkkbkcdhcgfn/<version>_0/`; the Chrome-generated `_metadata/` directory is not needed) into a working directory and run the following three scripts in this order:
-
-```
-python3 scripts/apply_arc_patches.py <working-directory>
-python3 scripts/patch_sender_checks.py <working-directory>
-python3 scripts/rebrand_chrome_strings.py <working-directory>
-```
-
-The first applies the manifest changes, the regular-tab fallback, the tab-group emulation, the on-demand script injection, and the network rules. The second makes the service worker accept messages from the panel even though Arc hosts it in a regular tab instead of a side panel. The third replaces user-facing "Chrome" wording with "Arc". Then replace everything in this repository except `scripts/`, `native-host/`, `README.md`, and `.gitignore` with the contents of the working directory (deleting files that no longer exist in the new build).
-
-The first two scripts locate minified identifiers by exact string match and stop with an `AssertionError` when the upstream code has changed; update the search patterns in the scripts for the new build in that case. The third only skips phrases it cannot find, so check the replacement counts it prints and add any remaining "Chrome" wording to its phrase list.
+The generated `build/` is a patched copy of the official extension you obtained yourself. It remains the property of Anthropic and of the respective upstream copyright holders of its components (such as gif.js and the KaTeX fonts). The author of this repository holds rights only over `scripts/`, `native-host/`, `build.sh`, and the Arc-specific modifications; `build/` is excluded from version control by `.gitignore`.
 
 ## Important Notes
 
 This extension is intended for developers and experimental use. It is not a general-purpose extension distributed through a public extension store.
 
-The `manifest.json` requests powerful permissions, including the following (see `permissions` in `manifest.json` for the full list):
+The generated `manifest.json` requests powerful permissions, including the following (see `permissions` in `manifest.json` for the full list):
 
 - `host_permissions: ["<all_urls>"]`
 - `debugger`
@@ -224,22 +203,25 @@ Use this extension only in an environment you control and only after understandi
 
 ### Requirements
 
-- Arc (tested on macOS). The extension itself needs nothing else
+- macOS and Arc
+- The official "Claude in Chrome" extension installed from the Chrome Web Store in Chrome (or Arc) on the same Mac; `build.sh` copies it from there
+- Python 3 (used by `build.sh` and by the Split View native host). Any of `/usr/bin/python3` (Xcode Command Line Tools), the python.org build, or the Homebrew build is fine. `/usr/bin/python3` stops working after an Xcode update until the license is accepted again (`sudo xcodebuild -license accept`); another installed Python is used in that case
 - A claude.ai account; the panel requires a paid plan
-- For the Split View integration: macOS and Python 3. The host launcher (`native-host/claude-arc-host`) tries `/usr/bin/python3` (Xcode Command Line Tools), the python.org build, and the Homebrew build in that order and uses the first one that actually runs. `/usr/bin/python3` stops working after an Xcode update until the license is accepted again (`sudo xcodebuild -license accept`); another installed Python is used in that case. `install.sh` checks that the host starts under the conditions Arc uses
 
 ### Steps
 
 1. Clone this repository locally
-2. Open Arc and enter `arc://extensions` in the address bar
-3. Enable "Developer mode" in the top-right corner
-4. Click "Load unpacked"
-5. Select this repository directory
+2. Run `bash build.sh`. It finds the newest installed official extension and generates the Arc build in `build/`. If it is installed somewhere else, pass the directory: `bash build.sh <official-extension-dir>`
+3. Open Arc and enter `arc://extensions` in the address bar
+4. Enable "Developer mode" in the top-right corner
+5. Click "Load unpacked" and select `build/`
 6. Click the Claude icon in the toolbar (Cmd+E also works). The panel opens as a regular tab and asks you to sign in to claude.ai
 
-There is no build step: the cloned directory can be loaded as is. Because `manifest.json` contains the public key, the extension ID is the same regardless of the directory it is loaded from. To open the panel next to the current tab, add the setup in the next section.
+Because the generated `manifest.json` carries the official public key, the extension ID is the same as the official one regardless of the directory it is loaded from. To open the panel next to the current tab, add the setup in the next section.
 
-To uninstall, click "Remove" in `arc://extensions` first and then delete the cloned directory; deleting the directory first leaves a broken entry in the list. If you registered the Split View integration, also run the removal steps in the next section.
+When the official extension updates in Chrome, run `bash build.sh` again and reload the extension in `arc://extensions`. The first two scripts locate minified identifiers by exact string match and stop with an `AssertionError` when the upstream code has changed; update the search patterns in the scripts for the new build in that case. The third only skips phrases it cannot find, so check the replacement counts it prints and add any remaining "Chrome" wording to its phrase list.
+
+To uninstall, click "Remove" in `arc://extensions` first and then delete `build/`; deleting the directory first leaves a broken entry in the list. If you registered the Split View integration, also run the removal steps in the next section.
 
 ## Opening in Split View (optional)
 
@@ -280,7 +262,7 @@ Finally, remove `/usr/bin/osascript` from the list in System Settings → Privac
 
 ## Before Use
 
-- Review the extension permissions
+- Review the permissions of the generated extension
 - Do not use it on pages that handle sensitive information
 - Do not use it in critical work environments or production environments
 - It may stop working due to changes in Claude, Arc, or Chrome
@@ -293,5 +275,5 @@ The author assumes no responsibility for any damage, malfunction, data loss, inf
 ## License
 
 No license is currently specified.
-The bundled extension itself (`assets/`, `i18n/`, `manifest.json`, and the other files derived from the official build) remains the property of Anthropic and the respective upstream copyright holders; the author of this repository holds rights only over `scripts/`, `native-host/`, and the Arc-specific modifications.
+This repository contains only `scripts/`, `native-host/`, `build.sh`, and documentation; it contains no copy of the official extension. The `build/` directory that `build.sh` generates remains the property of Anthropic and the respective upstream copyright holders, so do not redistribute it.
 Do not redistribute or use the contents of this repository commercially without explicit permission.
