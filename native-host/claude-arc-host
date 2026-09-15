@@ -1,0 +1,14 @@
+#!/bin/sh
+# Launcher registered as the native messaging host. Arc starts it with the login
+# session's PATH, where `python3` resolves to the /usr/bin stub; that stub stops
+# working whenever the Xcode license needs to be accepted again (e.g. after an
+# Xcode or Command Line Tools update). Pick the first Python 3 that actually
+# runs and hand it the real host, passing stdin/stdout through untouched.
+HERE="$(cd "$(dirname "$0")" && pwd)"
+for py in /usr/bin/python3 /usr/local/bin/python3 /opt/homebrew/bin/python3 \
+          /Library/Frameworks/Python.framework/Versions/Current/bin/python3; do
+  if [ -x "$py" ] && "$py" -c 'import sys' >/dev/null 2>&1; then
+    exec "$py" "$HERE/claude-arc-host.py"
+  fi
+done
+exec python3 "$HERE/claude-arc-host.py"

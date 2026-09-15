@@ -78,7 +78,7 @@ python3 scripts/rebrand_chrome_strings.py <作業ディレクトリ>
 
 - Arc（macOS 版で確認）．拡張機能本体はこれだけで動きます
 - claude.ai のアカウント．パネルは有料プランを要求します
-- Split View 連携を使う場合は macOS と，Arc から見える場所にある Python 3．Arc はログインセッションの既定の PATH（`/usr/bin` など）でホストを起動するため，Xcode Command Line Tools の `/usr/bin/python3` があれば足ります（未導入なら `xcode-select --install`）．Homebrew だけに入れた Python は見つかりません．`install.sh` が同じ条件で起動を確認します
+- Split View 連携を使う場合は macOS と Python 3．ホストの起動スクリプト（`native-host/claude-arc-host`）が `/usr/bin/python3`（Xcode Command Line Tools），python.org 版，Homebrew 版の順に，実際に起動できるものを選びます．`/usr/bin/python3` は Xcode の更新後にライセンス再同意（`sudo xcodebuild -license accept`）を求めて停止することがありますが，他の Python があればそちらが使われます．`install.sh` が Arc と同じ条件で起動を確認します
 
 ### 手順
 
@@ -98,7 +98,7 @@ python3 scripts/rebrand_chrome_strings.py <作業ディレクトリ>
 Arc には Side Panel API が無いため，既定ではパネルを通常タブとして開きます．同梱のネイティブメッセージングホストと launchd エージェントを登録すると，ツールバーのアイコンや Cmd+E で，現在のタブの隣に Split View としてパネルを開きます．
 
 1. システム設定 → プライバシーとセキュリティ → アクセシビリティ で「＋」を押し，Cmd+Shift+G で `/usr/bin/osascript` を指定して追加し，オンにする．この許可は本プロジェクトではなく `/usr/bin/osascript` そのものに与えられるため，以後は同じユーザーで動くどのプロセスでも，launchd 経由などで `osascript` を起動すれば同じ許可の下で GUI を操作できるようになる．Split View 連携をやめるときは，後述の解除手順でこの許可も外すこと
-2. ターミナルで `native-host/install.sh` を実行する．ネイティブホスト（`native-host/claude-arc-host.py`）が Arc に登録され（`~/Library/Application Support/Arc/NativeMessagingHosts/com.claude.arc.json`），launchd ユーザーエージェント `com.claude.arc.splitview` が読み込まれる．続けてアクセシビリティの検査が走り，結果が表示される．初回は「osascript が System Events を制御することを許可しますか」という確認が出るので許可する．開発時の検証用に Google Chrome にも同じ登録を書き込む場合は `WITH_CHROME=1 native-host/install.sh` として実行する
+2. ターミナルで `native-host/install.sh` を実行する．ネイティブホスト（`native-host/claude-arc-host`．内部で `claude-arc-host.py` を起動します）が Arc に登録され（`~/Library/Application Support/Arc/NativeMessagingHosts/com.claude.arc.json`），launchd ユーザーエージェント `com.claude.arc.splitview` が読み込まれる．続けてアクセシビリティの検査が走り，結果が表示される．初回は「osascript が System Events を制御することを許可しますか」という確認が出るので許可する．開発時の検証用に Google Chrome にも同じ登録を書き込む場合は `WITH_CHROME=1 native-host/install.sh` として実行する
 3. `arc://extensions` で拡張機能を再読み込みし，Claude アイコンをクリックする
 
 仕組みは次の通りです．ホストはタブ ID だけを `~/Library/Application Support/claude-arc/queue/` に書き，launchd がそれを検知して `/usr/bin/osascript` で `native-host/split-view.applescript` を実行します．AppleScript はパネルの URL を固定の拡張機能 ID から組み立て直し（キューの内容をそのまま入力することはしない），System Events で Arc のメニューから「Add Split View」「Add Vertical Split View」などの項目を探してクリックします（見つからなければ Arc の既定ショートカット Control+Shift+= を送ります）．新しいペインの入力欄にフォーカスが移ったことを確認してから，URL をクリップボード経由で貼り付けて Return を送ります．貼り付けの前後でクリップボードの内容を退避・復元しますが，その間は一時的に置き換わります．入力欄が見つからなければ何も入力せずエラーを返し，拡張機能は通常タブで開きます．
@@ -226,7 +226,7 @@ Use this extension only in an environment you control and only after understandi
 
 - Arc (tested on macOS). The extension itself needs nothing else
 - A claude.ai account; the panel requires a paid plan
-- For the Split View integration: macOS and a Python 3 that Arc can find. Arc starts the host with the login session's default PATH (`/usr/bin` and the like), so the `/usr/bin/python3` from the Xcode Command Line Tools is sufficient (`xcode-select --install` if missing). A Python installed only through Homebrew is not found. `install.sh` checks that the host starts under the same conditions
+- For the Split View integration: macOS and Python 3. The host launcher (`native-host/claude-arc-host`) tries `/usr/bin/python3` (Xcode Command Line Tools), the python.org build, and the Homebrew build in that order and uses the first one that actually runs. `/usr/bin/python3` stops working after an Xcode update until the license is accepted again (`sudo xcodebuild -license accept`); another installed Python is used in that case. `install.sh` checks that the host starts under the conditions Arc uses
 
 ### Steps
 
@@ -246,7 +246,7 @@ To uninstall, click "Remove" in `arc://extensions` first and then delete the clo
 Because Arc lacks the Side Panel API, the panel opens as a regular tab by default. Registering the bundled native messaging host and launchd agent makes the toolbar icon and Cmd+E open the panel as a Split View pane next to the current tab.
 
 1. In System Settings → Privacy & Security → Accessibility, press "+", use Cmd+Shift+G to enter `/usr/bin/osascript`, add it, and switch it on. This grant applies to `/usr/bin/osascript` itself, not to this project: afterwards any process running as your user can drive the GUI under the same grant by launching `osascript` (through launchd, for example). Revoke it with the removal steps below when you stop using the Split View integration
-2. Run `native-host/install.sh` from Terminal. It registers the native host (`native-host/claude-arc-host.py`) with Arc (`~/Library/Application Support/Arc/NativeMessagingHosts/com.claude.arc.json`), loads the launchd user agent `com.claude.arc.splitview`, and then probes Accessibility and prints the result. On first run macOS asks whether osascript may control System Events; click Allow. To also register the host with Google Chrome for developer testing, run `WITH_CHROME=1 native-host/install.sh`
+2. Run `native-host/install.sh` from Terminal. It registers the native host (`native-host/claude-arc-host`, which launches `claude-arc-host.py`) with Arc (`~/Library/Application Support/Arc/NativeMessagingHosts/com.claude.arc.json`), loads the launchd user agent `com.claude.arc.splitview`, and then probes Accessibility and prints the result. On first run macOS asks whether osascript may control System Events; click Allow. To also register the host with Google Chrome for developer testing, run `WITH_CHROME=1 native-host/install.sh`
 3. Reload the extension in `arc://extensions` and click the Claude icon
 
 How it works: the host writes only the tab id into `~/Library/Application Support/claude-arc/queue/`; launchd notices it and runs `native-host/split-view.applescript` with `/usr/bin/osascript`. The AppleScript rebuilds the panel URL from the fixed extension id (queue content is never typed as-is), uses System Events to find and click a menu item such as "Add Split View" or "Add Vertical Split View" (falling back to Arc's default shortcut Control+Shift+= when none is found), waits until the new pane's command bar has focus, then pastes the URL from the clipboard and presses Return. The clipboard contents are saved before the paste and restored afterwards, but they are replaced momentarily in between. If no command bar takes focus it types nothing, reports an error, and the extension falls back to a regular tab.

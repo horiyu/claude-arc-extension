@@ -13,7 +13,7 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-HOST="$HERE/claude-arc-host.py"
+HOST="$HERE/claude-arc-host"  # sh launcher that picks a working python3 for claude-arc-host.py
 SCRIPT="$HERE/split-view.applescript"
 # Fixed by the "key" field in manifest.json.
 EXTENSION_ID="fcoeoabgfenejglbffodgkkbkcdhcgfn"
@@ -26,7 +26,7 @@ DOMAIN="gui/$(id -u)"
 json_esc() { sed 's/\\/\\\\/g; s/"/\\"/g'; }
 xml_esc()  { sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g'; }
 
-chmod +x "$HOST"
+chmod +x "$HOST" "$HERE/claude-arc-host.py"
 
 # Arc starts the host with the login session's PATH, not the shell's; probe it the same way.
 ARC_PATH="$(launchctl getenv PATH 2>/dev/null || true)"
@@ -34,7 +34,8 @@ ARC_PATH="${ARC_PATH:-/usr/bin:/bin:/usr/sbin:/sbin}"
 if ! printf '\x12\x00\x00\x00{"command":"ping"}' \
   | env -i PATH="$ARC_PATH" HOME="$HOME" "$HOST" 2>/dev/null | tail -c +5 | grep -q '"pong": true'; then
   echo "error: $HOST does not start with the PATH Arc uses ($ARC_PATH)." >&2
-  echo "Install Python 3 where that PATH can find it (e.g. xcode-select --install) and run this script again." >&2
+  echo "No working Python 3 was found (/usr/bin/python3 may need 'sudo xcodebuild -license accept';" >&2
+  echo "python.org or Homebrew installs are also accepted). Fix that and run this script again." >&2
   exit 1
 fi
 
